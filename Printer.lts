@@ -1,0 +1,49 @@
+const MAX_NO_OF_PAPERS = 3
+const MIN_NO_OF_PAPERS = 1
+
+//count of papers in the printer
+range NO_PAPERS_IN_PAPER_TRAY = 0 .. MAX_NO_OF_PAPERS
+//set of users
+set PrinterUsers = { student1 , student2 , technician }
+
+//defining sets of actions
+set Actions = {acquireToPrintDocuments , acquireToRefillPapers , reFill , cannotReFill}
+
+//------------------------------------ printer process -------------------------------------------
+// repetitve behaviour from 2 students and technician to print or refill the priner
+// if there are more than 1 paper, student can print documents upto 3
+// if papers are not availble(0), technicain has to refill up to 3 papers
+// after releasing the printer it returns to the intial state with required status
+PRINTER(Available_papers = MAX_NO_OF_PAPERS) = PRINTING_STATUS[ MAX_NO_OF_PAPERS ],
+PRINTING_STATUS[available_papers : NO_PAPERS_IN_PAPER_TRAY] =
+				 if(available_papers >0)
+				 then ( acquireToPrintDocuments -> release -> PRINTING_STATUS[available_papers - 1] |
+acquireToRefillPapers -> cannotReFill -> release -> PRINTING_STATUS[available_papers] )
+			     else(acquireToRefillPapers -> reFill -> release -> PRINTING_STATUS[MAX_NO_OF_PAPERS]).
+
+//------------------------------------ student process -------------------------------------------
+// student can print any number of documents
+// since 1 document requires 1 paper, printer can print documents as long as technician refill the printer
+// student process doesnt terminates untill student finishes printing his all documents
+// means, document count > paper count, run out of paper
+STUDENT(Papers_count = 1) = PRINT[0],
+PRINT[document_count : 0..Papers_count] = 
+              if (document_count < Papers_count)
+			  //printTheDocument[document_count+1]  ,  to print as 1,2,3 instead of printing 0,1,2 , because oprinting starts from 0
+			  then(acquireToPrintDocuments -> printTheDocument[document_count+1] ->release -> PRINT[document_count +1])
+			  else (terminate -> END) + Actions.
+
+// ------------------------------------ technician process -------------------------------------------
+// technician refill the papers in printer if there are no papers to print
+// after reliing release the shared resource
+// if papers availble, release the printer without filling with papers
+//TECHNICIAN = (acquireToRefillPapers -> {reFill, cannotReFill} -> release -> terminate -> END ) + StudentsActions.
+TECHNICIAN = (acquireToRefillPapers -> {reFill, cannotReFill} -> release -> TECHNICIAN | terminate -> END ) + Actions.
+	
+
+//------------------------------------ printing system -------------------------------------------
+// combining all processes using parallel compposition
+// ensuring mutual exclusive access to the printer
+// prefixing all the terminate action in process to terminate
+||PRINTING_SYSTEM = (student1: STUDENT(3) || student2: STUDENT(2) || technician : TECHNICIAN ||  PrinterUsers :: PRINTER )
+/{terminate/ PrinterUsers.terminate}.
